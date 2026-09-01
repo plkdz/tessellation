@@ -56,6 +56,20 @@ python src/hat/tile_ab_companion_substitution.py -n 4 --a 1 --b 1.73205080756887
 python src/tiling_explorer.py --preset hat --allow-reflection --allowed-length-pairs "1:1,1:2,2:2,sqrt3:sqrt3" --max-tiles 300 --max-states 20000 --export-every 100 --save-state-h5 --output-dir outputs/example-hat-search
 ```
 
+实时观看时可以让搜索器同时启动一个本地 Canvas 查看页。这个模式不需要等 PNG 或 HDF5 事后渲染，浏览器会通过实时状态流重画当前搜索状态：
+
+```powershell
+python src\tiling_explorer.py --preset hat --allow-reflection --allowed-length-pairs "1:1,1:2,2:2,sqrt3:sqrt3" --max-tiles 300 --max-states 999999999 --export-every 1000000 --output-dir outputs/dfs_hat_live --live-viewer --live-open --live-every 1
+```
+
+更多说明：
+
+- [项目总览](docs/project.md)
+- [自动镶嵌搜索](docs/tiling_explorer.md)
+- [实时查看器](docs/live_viewer.md)
+- [离线动画和音频](docs/animation_audio.md)
+- [Hat 相关脚本](docs/hat_scripts.md)
+
 ## 搜索算法设想
 
 目标是搜索新的可镶嵌候选形状，尤其是可能强迫非周期的单一形状。一个设想是不直接枚举任意多边形坐标，而是从周期性点集或周期性 cell graph 出发。
@@ -99,3 +113,7 @@ python src/bake_audio.py --events outputs/example-hat-animation/audio_events.h5 
 - David Smith, Joseph Samuel Myers, Craig S. Kaplan, Chaim Goodman-Strauss, [An aperiodic monotile](https://arxiv.org/abs/2303.10798), 2023.
 - David Smith, Joseph Samuel Myers, Craig S. Kaplan, Chaim Goodman-Strauss, [A chiral aperiodic monotile](https://arxiv.org/abs/2305.17743), 2023.
 - Craig S. Kaplan, [Hat monotile resources](https://cs.uwaterloo.ca/~csk/hat/).
+
+## Fork 说明
+
+This fork contains modifications by plkdz, 2026-09-02. The project remains licensed under GPL-3.0.
