@@ -14,6 +14,7 @@ import csv
 import json
 import math
 import time
+import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -21,6 +22,8 @@ from typing import Iterable
 from PIL import Image, ImageDraw, ImageFilter
 from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPolygon, Point as ShapelyPoint, Polygon
 from shapely.ops import snap, unary_union
+
+from live_viewer import LiveViewer
 
 
 SQRT3 = math.sqrt(3.0)
@@ -516,6 +519,19 @@ def draw_png(state: State, output: Path) -> None:
     image.save(output)
 
 
+def live_state_payload(step: int, state: State) -> dict[str, object]:
+    return {
+        "step": step,
+        "tiles": [
+            {
+                "reflected": tile.reflected,
+                "points": [[x, y] for x, y in tile.points],
+            }
+            for tile in state.tiles
+        ],
+    }
+
+
 def dfs_explore(
     base_points: tuple[Point, ...],
     output_dir: Path,
@@ -534,6 +550,8 @@ def dfs_explore(
     length_tolerance: float,
     export_every: int,
     save_state_h5_files: bool,
+    live_viewer: LiveViewer | None,
+    live_every: int,
 ) -> tuple[int, int]:
     output_dir.mkdir(parents=True, exist_ok=True)
     old_outputs = tuple(output_dir.glob("step_*.png")) + tuple(output_dir.glob("step_*.svg")) + tuple(output_dir.glob("state_*.h5"))
@@ -619,6 +637,9 @@ def dfs_explore(
             state = frame.state
 
             if frame.choices is None:
+                if live_viewer is not None and expanded % live_every == 0:
+                    live_viewer.publish(live_state_payload(expanded, state))
+
                 should_export = expanded % export_every == 0
                 if should_export:
                     draw_png(
@@ -694,6 +715,11 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Gaussian blur radius for bitmap scoring, measured in tile diameters",
     )
+    parser.add_argument("--live-viewer", action="store_true", help="serve live search states to a local Canvas viewer")
+    parser.add_argument("--live-host", default="127.0.0.1", help="host for the live viewer server")
+    parser.add_argument("--live-port", type=int, default=8765, help="port for the live viewer server")
+    parser.add_argument("--live-every", type=int, default=1, help="publish one live state every N expanded DFS states")
+    parser.add_argument("--live-open", action="store_true", help="open the live viewer URL in the default browser")
     return parser.parse_args()
 
 
@@ -711,28 +737,43 @@ def main() -> None:
         raise SystemExit("--bitmap-pixels-per-tile-diameter must be positive")
     if args.bitmap_blur_radius_diameters < 0:
         raise SystemExit("--bitmap-blur-radius-diameters must be non-negative")
+    if args.live_every < 1:
+        raise SystemExit("--live-every must be at least 1")
 
     points = load_polygon(args.polygon) if args.polygon else preset_polygon(args.preset)
     base_points = normalize_base(points)
-    exported, expanded = dfs_explore(
-        base_points,
-        args.output_dir,
-        args.allow_reflection,
-        args.max_tiles,
-        args.max_states,
-        args.area_tol,
-        args.contact_tol,
-        args.key_precision,
-        args.score_mode,
-        args.angle_samples,
-        args.probe_radius,
-        args.bitmap_pixels_per_tile_diameter,
-        args.bitmap_blur_radius_diameters,
-        args.allowed_length_pairs,
-        args.length_tol,
-        args.export_every,
-        args.save_state_h5,
-    )
+    live_viewer = LiveViewer(args.live_host, args.live_port) if args.live_viewer else None
+    if live_viewer is not None:
+        live_viewer.start()
+        print(f"Live viewer: {live_viewer.url}")
+        if args.live_open:
+            webbrowser.open(live_viewer.url)
+
+    try:
+        exported, expanded = dfs_explore(
+            base_points,
+            args.output_dir,
+            args.allow_reflection,
+            args.max_tiles,
+            args.max_states,
+            args.area_tol,
+            args.contact_tol,
+            args.key_precision,
+            args.score_mode,
+            args.angle_samples,
+            args.probe_radius,
+            args.bitmap_pixels_per_tile_diameter,
+            args.bitmap_blur_radius_diameters,
+            args.allowed_length_pairs,
+            args.length_tol,
+            args.export_every,
+            args.save_state_h5,
+            live_viewer,
+            args.live_every,
+        )
+    finally:
+        if live_viewer is not None:
+            live_viewer.close()
     print(f"Exported {exported} PNGs after expanding {expanded} DFS states into {args.output_dir}.")
 
 
